@@ -26,6 +26,7 @@ import pandas as pd
 from collections import Counter
 import configuration as config
 import model as models
+import fasttext
 
 class Preprocessing:
 
@@ -57,13 +58,14 @@ class Preprocessing:
 
         # perform Bag of Words
         data_max_seq_length = self.statistics(encoded_docs, labels, attribute) # can be used to replace MAX_SEQ_LENGTH
-        self.X = sequence.pad_sequences(encoded_docs, maxlen=config.MAX_SEQ_LENGTH)
+        self.X = sequence.pad_sequences(encoded_docs, maxlen=data_max_seq_length) # use either a fixed max-length or the real max-length from data
         self.Y = labels
+        self.attribute = attribute
 
     def load_word_embedding(self, use_word_embedding):
         # if not use it, 
         if not use_word_embedding:
-            self.embedding_matrix = None
+            self.embedding_matrix = []
             self.EMBEDDING_DIM = 100
             return 
         # if exist, 
@@ -77,6 +79,7 @@ class Preprocessing:
 
         # read the fastText Embedding
         embeddings_index = dict()
+        count_oov = 0
         f = open(config.PATH_EMBEDDING)
         for line in f:
             values = line.split()
@@ -95,7 +98,10 @@ class Preprocessing:
             if embedding_vector is not None:
                 # words not found in embedding index will be all-zeros
                 embedding_matrix[i] = embedding_vector
+            else:
+                count_oov += 1
         print("Finished forming weightMatrix")
+        print("%d out of %d words are NOT in the pre-trained model" % (count_oov, config.MAX_NUM_WORDS))
 
         # update the variables
         self.embedding_matrix = embedding_matrix
@@ -105,37 +111,114 @@ class Preprocessing:
         with open("EmbeddingMatrix.pkl", "wb") as f:
             pickle.dump(embedding_matrix, f)
         return 
-        
+    
+
+    def load_fasttext(self, use_word_embedding):
+        # if not use it, 
+        if not use_word_embedding:
+            self.embedding_matrix = []
+            self.EMBEDDING_DIM = 100
+            return 
+        # if exist, 
+        if os.path.exists("fastMatrix.pkl"):
+            print "EXISTS!"
+            with open("fastMatrix.pkl", 'rb') as f:
+                embedding_matrix = pickle.load(f)
+            self.embedding_matrix = embedding_matrix
+            self.EMBEDDING_DIM = len(embedding_matrix[0])
+            return 
+
+        # read the fastText Embedding
+        embeddings_index = dict()
+        count_oov = 0
+        fastModel = fasttext.load_model(config.PATH_EMBEDDING)
+        EMBEDDING_DIM = len(fastModel['good'])
+        print('Loaded %s word vectors.' % len(embeddings_index))
+
+        # create a weight matrix for words in training docs
+        embedding_matrix = np.zeros((config.MAX_NUM_WORDS, EMBEDDING_DIM))
+        word2idx = {k:v for k,v in self.word_index.items() if v < config.MAX_NUM_WORDS}
+        for word, i in word2idx.items():
+            embedding_matrix[i] = fastModel[word]
+            if word not in fastModel.words:
+                # words not found in embedding index will be all-zeros
+                count_oov += 1
+        print("Finished forming weightMatrix")
+        print("%d out of %d words are NOT in the pre-trained model" % (count_oov, config.MAX_NUM_WORDS))
+
+        # update the variables
+        self.embedding_matrix = embedding_matrix
+        self.EMBEDDING_DIM = EMBEDDING_DIM
+
+        # dump the matrix 
+        with open("fastMatrix.pkl", "wb") as f:
+            pickle.dump(embedding_matrix, f)
+        return
+
+    # generater, returns indices for train and test data  
+    def cross_validation(self, X, Y, seed):
+        kfold = StratifiedKFold(n_splits=10, shuffle=True, random_state=seed)
+        kfolds = kfold.split(self.X, self.Y)
+        return kfolds       
 
 
 def main():
 
-    dims = ['cOPN', 'cEXT', 'cAGR', 'cCON', 'cNEU']
+    dims = ['cAGR', 'cCON', 'cEXT', 'cNEU', 'cOPN']
+    choice = int(sys.argv[1])
 
-    # create objects 
+    # preprocess set up
     preprocessObj = Preprocessing()
-    modelObj = models.CNN()
     paramsObj = config.Params()
+    preprocessObj.load_data(dims[choice])
+    preprocessObj.load_fasttext(paramsObj.use_word_embedding)
 
-    preprocessObj.load_data(dims[0])
-    preprocessObj.load_word_embedding(paramsObj.use_word_embedding)
+    # set seed and cross validation
+    seed = 7
+    numpy.random.seed(seed)
+    kfolds = preprocessObj.cross_validation(preprocessObj.X, preprocessObj.Y, seed)
+    cv_acc = []
+    cv_records = []
+    count_iter = 1
 
-    # build the model
-    model = modelObj.build_simple_CNN(paramsObj=paramsObj, weight=preprocessObj.embedding_matrix)
+    # loop the kfolds
+    for train, test in kfolds:
 
-    # save the best model & history
-    # filepath="weights.best.hdf5"
-    # checkpoint = ModelCheckpoint(filepath, monitor='val_acc', verbose=1, save_best_only=True, mode='max')
-    history = History()
-    callbacks_list = [history]
-
-    # fit the model
-    model.fit(preprocessObj.X, preprocessObj.Y, validation_split=0.2, epochs=paramsObj.n_epoch, batch_size=paramsObj.batch_size, verbose=2, callbacks=callbacks_list)
-
+        # create objects for each fold of 10-fold CV
+        modelObj = models.CNN()
     
+        # build the model
+        model = modelObj.build_simple_CNN(paramsObj=paramsObj, weight=preprocessObj.embedding_matrix)
+        print(model.summary())
+
+        # save the best model & history
+        # filepath="weights.best.hdf5"
+        # checkpoint = ModelCheckpoint(filepath, monitor='val_acc', verbose=1, save_best_only=True, mode='max')
+        history = History()
+        callbacks_list = [history]
+
+        # fit the model
+        model.fit(preprocessObj.X[train], preprocessObj.Y[train], 
+                validation_data = (preprocessObj.X[test], preprocessObj.Y[test]),
+                epochs=paramsObj.n_epoch, 
+                batch_size=paramsObj.batch_size, 
+                verbose=2, 
+                callbacks=callbacks_list)
+
+        # record
+        ct = Counter(preprocessObj.Y)
+        print("----%s: %d----" % (preprocessObj.attribute, count_iter))
+        print("----highest evaluation accuracy is %f" % (100*max(history.history['val_acc'])))
+        print("----dominant distribution in data is %f" % max([ct[k]*100/float(preprocessObj.Y.shape[0]) for k in ct]))
+        cv_acc.append(max(history.history['val_acc']))
+        cv_records.append(history.history['val_acc'])
+        count_iter += 1
+    
+    print("The 10-fold CV score is %s" % np.nanmean(cv_acc))
 
 if __name__ == "__main__":
     main()
+
 
 
 
