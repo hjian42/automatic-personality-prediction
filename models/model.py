@@ -15,7 +15,7 @@ import configuration as config
 from keras.layers import Merge, Input, BatchNormalization
 from keras.layers.merge import concatenate
 
-from attention1 import AttLayer
+from attention import AttLayer
 
 class DeepModel:
 
