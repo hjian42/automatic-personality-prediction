@@ -34,9 +34,50 @@ class DeepModel:
 
         return models[modelName](paramsObj, weight)
 
-    def build_HAN(self):
+    # two implementatins of HAN because 1. synthesio's implementation 2. richard's implementation
+    # richard's implementation: let it run, check acc
+    def build_HAN1(self, paramsObj, weight=[]):
 
-        return
+        # Embeddings
+        if len(weight) == 0 or paramsObj.use_word_embedding == False:
+            # NOT use word embedding
+            embedding_layer = Embedding(config.MAX_NUM_WORDS, config.EMBEDDING_DIM, input_length=config.MAX_SEQ_LENGTH)
+        else:
+            # use word embedding
+            embedding_layer = Embedding(
+                config.MAX_NUM_WORDS,
+                config.EMBEDDING_DIM,
+                input_length = config.MAX_SEQ_LENGTH,
+                weights = [weight],
+                trainable = paramsObj.train_embedding
+                )
+
+        # Create the sentModel 
+        sentence_input = Input(shape=(config.MAX_SEQ_LENGTH, ), # no need to specify the last dimension, why
+                       dtype='int32',
+                       name='sentence_input')
+        embedding_sequences = embedding_layer(sentence_input)
+        l_lstm = Bidirectional(GRU(100, return_sequences=True))(embedding_sequences)
+        l_dense = TimeDistributed(Dense(200))(l_lstm)
+        l_att = AttLayer()(l_dense)
+        sentEncoder = Model(sentence_input, l_att)
+
+        # dialogModel
+        dialog_input = Input(shape=(config.MAX_SENTS, config.MAX_SEQ_LENGTH), dtype='int32')
+        dialog_encoder = TimeDistributed(sentEncoder)(dialog_input)
+        l_lstm_sent = Bidirectional(GRU(100, return_sequences=True))(dialog_encoder)
+        l_dense_sent = TimeDistributed(Dense(200))(l_lstm_sent)
+        l_att_sent = AttLayer()(l_dense_sent)
+
+        # output layer
+        preds = Dense(2, activation='softmax')(l_att_sent)
+        model = Model(dialog_input, preds)
+
+        model.compile(loss='categorical_crossentropy',
+              optimizer='rmsprop',
+              metrics=['acc'])
+
+        return model
 
     def build_hang(self, paramsObj, weight=[]):
 
@@ -198,6 +239,8 @@ class DeepModel:
                 trainable=paramsObj.train_embedding))
 
         model.add(Bidirectional(GRU(128, dropout=0.2, recurrent_dropout=0.1, return_sequences=True)))
+        # TODO: add time steps again
+
         model.add(AttLayer())
 
         model.add(Dense(config.ClassNum, activation='softmax'))

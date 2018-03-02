@@ -4,6 +4,10 @@ from keras import backend as K
 from keras import constraints
 from keras import regularizers
 
+# TimeDistributed vs attentionLayer
+# 1. how attention works with both timedistributed and bidirectional?
+# 2. how to make the sentence pay attention on an sentence level not word level
+
 # Hierarchical Model with Attention
 class AttLayer(Layer):
     def __init__(self, init='glorot_uniform', kernel_regularizer=None, 

@@ -14,6 +14,7 @@ ModelName = 'ABCNN'
 
 MAX_NUM_WORDS = 10000 # truncated vocab_size
 MAX_SEQ_LENGTH = 400 
+MAX_SENTS = 30
 EMBEDDING_DIM = 100
 ClassNum = 2
 
