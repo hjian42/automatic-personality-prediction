@@ -12,7 +12,7 @@ Automatic text-based personality recognition, as an important topic in computati
 We achieved state-of-art results on this dataset. [Essays](https://psycnet.apa.org/doiLanding?doi=10.1037%2F0022-3514.77.6.1296) dataset is the benchmark dataset for text-based personality recognition with 2,468 self-report essays.
 
 ### Friends Personality
-We created this dataset and established a sold benchmark. 711 short conversations are extracted and annotated from the first four seasons of Friends TV Show transcripts.
+We created this dataset and established a solid benchmark. 711 short conversations are extracted and annotated from the first four seasons of Friends TV Show transcripts.
 
 You could find more details about this dataset in this repo [emorynlp/personality-detection](https://github.com/emorynlp/personality-detection).
 
