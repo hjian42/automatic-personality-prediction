@@ -1,7 +1,7 @@
 # Modeling Personality with Attentive Networks and Contextual Embeddings
 
 ## Introduction
-This repository is for a paper submitted for AAAI 2020 student abstract. In this project, we introduced both attentive networks and contextual embeddings (BERT and roBERTa) to the task and explored the performance on two datasets: "FriendsPersona" and "Essays". 
+This repository is for a paper accepted for AAAI 2020 student abstract. In this project, we introduced both attentive networks and contextual embeddings (BERT and roBERTa) to the task and explored the performance on two datasets: "FriendsPersona" and "Essays". 
 
 We created the first dialogue dataset "FriendsPersona" for automatic personality recognition with a novel and scalable dialogue extraction algorithm. We established a solid benchmark on our "FriendsPersona" dataset. And we achieved state-of-art results on the benchmark "Essays" dataset. 
 
